@@ -1,0 +1,93 @@
+---
+kind: KafkaNodePool
+apiVersion: kafka.strimzi.io/v1beta2
+metadata:
+  name: knp-controller
+  labels:
+    strimzi.io/cluster: demo-cluster
+spec:
+  replicas: 1
+  roles:
+    - controller
+  storage:
+    type: ephemeral
+    sizeLimit: 2Gi
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: knp-broker
+  labels:
+    strimzi.io/cluster: demo-cluster
+spec:
+  replicas: 1
+  roles:
+    - broker
+  storage:
+    type: ephemeral
+    sizeLimit: 10Gi
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: demo-cluster
+  labels:
+    app: demo-cluster
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+  kafka:
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      log.retention.check.interval.ms: 10000 # The frequency in milliseconds that the log cleaner checks whether any log segment is eligible for deletion to meet the retention policies.
+      # Tiered storage tunning
+      remote.log.manager.task.interval.ms: 5000 # The interval at which the remote log manager runs the scheduled tasks like copy segments, and clean up remote log segments.
+      remote.log.storage.system.enable: 'true'
+      rlmm.config.remote.log.metadata.topic.replication.factor: 1
+    tieredStorage:
+      type: custom
+      remoteStorageManager:
+        className: io.aiven.kafka.tieredstorage.RemoteStorageManager
+        classPath: /opt/kafka/libs/tiered-storage/*
+        config:
+          storage.backend.class: io.aiven.kafka.tieredstorage.storage.s3.S3Storage
+          storage.s3.endpoint.url: http://minio:9000
+          storage.s3.bucket.name: kafka-tiered-storage
+          storage.s3.region: "us-east-1"
+          storage.s3.path.style.access.enabled: "true"
+          storage.aws.access.key.id: "minioadmin"
+          storage.aws.secret.access.key: "minioadmin"
+          chunk.size: "4194304"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: tiered-storage-test
+  labels:
+    strimzi.io/cluster: demo-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    min.insync.replicas: 1
+    retention.bytes: 107374182400 # ~100 Gi
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 10485760 # ~10MB
+    file.delete.delay.ms: 1000
+    # Tiered storage configuration
+    remote.storage.enable: true
+    local.retention.ms: 60000 # 1 minute
+    local.retention.bytes: 5000000 # 5 MB

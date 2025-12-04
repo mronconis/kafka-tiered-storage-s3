@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: kafka-producer
+  name: kafka-producer
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 1
+  template:
+    metadata:
+      name: kafka-producer
+      labels:
+        app: kafka-producer
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: kafka-producer
+        image: quay.io/strimzi/kafka:0.45.0-kafka-3.9.0
+        command: [ "bin/kafka-producer-perf-test.sh" ]
+        args: [ "--topic", "tiered-storage-test", "--throughput", "1000000000", "--num-records", "1000000", "--producer-props", "acks=all", "bootstrap.servers=demo-cluster-kafka-bootstrap.kafka-tiered-storage.svc.cluster.local:9092", "--record-size", "100" ]
